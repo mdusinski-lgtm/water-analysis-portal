@@ -1,0 +1,248 @@
+<!-- 
+    PRODUCT: Water Analysis Ultimate Portal (Iframe Isolated Engine)
+    VERSION: 11.0 (Zero-Conflict Launcher)
+    COPYRIGHT: © 2025 Marcin Dusinski. All rights reserved.
+-->
+<!DOCTYPE html>
+<html lang="no" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Marcin Dusinski">
+    <title>Portal Analizy Wody - Marcin Dusinski</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; margin: 0; padding: 0; overflow: hidden; }
+        .hidden-view { display: none !important; }
+        
+        /* Stylistyka kart wyboru */
+        .app-card { 
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+            cursor: pointer; 
+            border: 1px solid rgba(226, 232, 240, 0.8); 
+        }
+        .app-card:hover { 
+            transform: translateY(-12px); 
+            box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.15); 
+            border-color: #3b82f6; 
+        }
+
+        /* Stylizacja Iframe */
+        #app-viewport {
+            width: 100%;
+            height: calc(100vh - 64px);
+            border: none;
+            background: white;
+        }
+
+        /* Pasek nawigacyjny aplikacji */
+        #app-nav {
+            height: 64px;
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. EKRAN STARTOWY (LAUNCHER) -->
+    <div id="launcher-view" class="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
+        <!-- Selektor języka portalu -->
+        <div class="absolute top-8 right-8 no-print">
+            <select id="lang-selector" class="rounded-xl border-slate-200 text-xs font-bold p-3 bg-white shadow-sm focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                <option value="no">🇳🇴 Norsk</option>
+                <option value="en">🇬🇧 English</option>
+                <option value="pl">🇵🇱 Polski</option>
+            </select>
+        </div>
+
+        <div class="max-w-4xl w-full text-center">
+            <h1 class="text-5xl md:text-7xl font-black text-slate-900 mb-2 tracking-tighter uppercase" id="p-title">Vannanalyse Portal</h1>
+            <p class="text-lg text-slate-400 mb-16 font-medium" id="p-subtitle">Profesjonelle verktøy for laboratorieresultater</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <!-- Karta ALS -->
+                <div onclick="runApp('als', 'als svare v51.html')" class="app-card bg-white p-10 rounded-[2.5rem] shadow-xl flex flex-col items-center group">
+                    <div class="w-16 h-16 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <h2 class="text-2xl font-black text-slate-800 mb-4 uppercase tracking-tight" id="p-als-title">Generator ALS</h2>
+                    <p class="text-slate-400 text-sm leading-relaxed" id="p-als-desc">Enkeltanalyser for kunder. Rask generering av rapporter og meldinger.</p>
+                    <div class="mt-10 text-blue-600 font-black flex items-center uppercase tracking-widest text-xs">
+                        <span class="p-launch-text">Kjør programmet</span> <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    </div>
+                </div>
+
+                <!-- Karta Master -->
+                <div onclick="runApp('master', 'Water Analysis App - Final Client Version.html')" class="app-card bg-white p-10 rounded-[2.5rem] shadow-xl flex flex-col items-center group">
+                    <div class="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-purple-600 group-hover:text-white transition-all duration-500">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                    </div>
+                    <h2 class="text-2xl font-black text-slate-800 mb-4 uppercase tracking-tight" id="p-master-title">Master Timeline</h2>
+                    <p class="text-slate-400 text-sm leading-relaxed" id="p-master-desc">Sammenligningsverktøy for mange filer. Trendgrafer og full statistikk.</p>
+                    <div class="mt-10 text-purple-600 font-black flex items-center uppercase tracking-widest text-xs">
+                        <span class="p-launch-text">Kjør programmet</span> <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-24 pt-6 flex flex-col items-center opacity-20 hover:opacity-100 transition-opacity duration-700">
+                <p class="text-[10px] text-slate-500 uppercase tracking-[0.4em] font-bold italic">
+                    &copy; 2025 Marcin Dusinski | System Architect
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. WIDOK APLIKACJI (IFRAME) -->
+    <div id="app-view" class="hidden-view">
+        <nav id="app-nav">
+            <button onclick="closeApp()" class="flex items-center text-xs font-black text-slate-400 hover:text-slate-900 transition-colors uppercase tracking-widest">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> 
+                <span id="back-label">Hovedmeny</span>
+            </button>
+            
+            <div class="flex items-center gap-4">
+                <div id="nav-loader" class="loader"></div>
+                <span id="app-status-badge" class="text-[9px] font-black px-4 py-2 rounded-full uppercase tracking-widest bg-slate-100 text-slate-500">Active Session</span>
+            </div>
+        </nav>
+        
+        <iframe id="app-viewport" src=""></iframe>
+    </div>
+
+    <script>
+        // --- KONFIGURACJA JĘZYKOWA ---
+        const translations = {
+            no: {
+                pTitle: "Vannanalyse Portal",
+                pSubtitle: "Profesjonelle verktøy for laboratorieresultater",
+                alsTitle: "Generator ALS",
+                alsDesc: "Analyse av enkelte Excel-filer fra ALS. Automatiske rapporter og meldinger til kunder.",
+                masterTitle: "Master Timeline",
+                masterDesc: "Sammenligning av mange resultater på en tidslinje. Trendgrafer og full statistikk.",
+                launch: "Kjør programmet",
+                back: "Hovedmeny"
+            },
+            en: {
+                pTitle: "Water Analysis Portal",
+                pSubtitle: "Professional tools for laboratory results",
+                alsTitle: "ALS Generator",
+                alsDesc: "Analyze single ALS Excel files. Generate ready-to-send customer notifications.",
+                masterTitle: "Master Timeline",
+                masterDesc: "Compare multiple results on a timeline. Trend charts and comprehensive statistics.",
+                launch: "Run program",
+                back: "Main Menu"
+            },
+            pl: {
+                pTitle: "Portal Analizy Wody",
+                pSubtitle: "Narzędzia do profesjonalnej obróbki wyników laboratoryjnych",
+                alsTitle: "Generator ALS",
+                alsDesc: "Analiza pojedynczych plików Excel z ALS. Raporty i wzory powiadomień dla klientów.",
+                masterTitle: "Master Timeline",
+                masterDesc: "Porównywanie wielu wyników na osi czasu. Wykresy trendów i pełne statystyki.",
+                launch: "Uruchom program",
+                back: "Menu główne"
+            }
+        };
+
+        let currentLang = 'no';
+
+        function setPortalLang(lang) {
+            currentLang = lang;
+            const T = translations[lang];
+            
+            document.getElementById('p-title').innerText = T.pTitle;
+            document.getElementById('p-subtitle').innerText = T.pSubtitle;
+            document.getElementById('p-als-title').innerText = T.alsTitle;
+            document.getElementById('p-als-desc').innerText = T.alsDesc;
+            document.getElementById('p-master-title').innerText = T.masterTitle;
+            document.getElementById('p-master-desc').innerText = T.masterDesc;
+            document.getElementById('back-label').innerText = T.back;
+            
+            document.querySelectorAll('.p-launch-text').forEach(el => el.innerText = T.launch);
+            document.getElementById('lang-selector').value = lang;
+        }
+
+        document.getElementById('lang-selector').addEventListener('change', (e) => setPortalLang(e.target.value));
+
+        // --- ZARZĄDZANIE APLIKACJAMI ---
+        function runApp(type, fileName) {
+            const launcher = document.getElementById('launcher-view');
+            const appView = document.getElementById('app-view');
+            const iframe = document.getElementById('app-viewport');
+            const loader = document.getElementById('nav-loader');
+            const badge = document.getElementById('app-status-badge');
+
+            // Pokaż loader i widok
+            loader.style.display = 'block';
+            launcher.classList.add('hidden-view');
+            appView.classList.remove('hidden-view');
+
+            // Ustaw badge
+            if (type === 'als') {
+                badge.className = "text-[9px] font-black px-4 py-2 rounded-full uppercase tracking-widest bg-blue-100 text-blue-600";
+                badge.innerText = "ALS Generator Active";
+            } else {
+                badge.className = "text-[9px] font-black px-4 py-2 rounded-full uppercase tracking-widest bg-purple-100 text-purple-600";
+                badge.innerText = "Master Timeline Active";
+            }
+
+            // Załaduj plik do iframe
+            iframe.src = fileName;
+
+            iframe.onload = function() {
+                loader.style.display = 'none';
+            };
+        }
+
+        function closeApp() {
+            const launcher = document.getElementById('launcher-view');
+            const appView = document.getElementById('app-view');
+            const iframe = document.getElementById('app-viewport');
+
+            iframe.src = ""; // Reset iframe
+            appView.classList.add('hidden-view');
+            launcher.classList.remove('hidden-view');
+        }
+
+        // --- TIME BOMB (Ochrona przed nieautoryzowanym użyciem po terminie) ---
+        const expiryDate = new Date(2026, 1, 21); // 21 Luty 2026
+        if (new Date() >= expiryDate) {
+            document.body.innerHTML = `
+                <div style="background:#0f172a;color:#94a3b8;font-family:monospace;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;text-align:center;">
+                    <div style="max-width:600px;width:100%;background:#1e293b;padding:40px;border-radius:12px;border:1px solid #ef4444;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+                        <h1 style="color:#ef4444;font-size:20px;font-weight:bold;margin-bottom:20px;border-bottom:1px solid #334155;padding-bottom:15px;text-transform:uppercase;">Critical System Error: 0xFD20260221</h1>
+                        <p style="margin-bottom:20px;">The application core integrity check has failed.</p>
+                        <p style="color:#64748b;font-size:12px;line-height:1.6;">Reason: EXPIRED_LICENCE_SIGNATURE<br>Status: ACCESS_TERMINATED</p>
+                        <p style="margin-top:30px;color:#cbd5e1;">Please contact administrator <strong>Marcin Dusinski</strong> to restore access.</p>
+                    </div>
+                </div>`;
+        }
+
+        // Inicjalizacja domyślnego języka
+        window.onload = () => setPortalLang('no');
+    </script>
+</body>
+</html>

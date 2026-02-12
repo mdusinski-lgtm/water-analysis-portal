@@ -1,0 +1,804 @@
+<!-- 
+    PRODUCT: Water Analysis Report Generator (ALS Version)
+    VERSION: 2.7 (Release Build)
+    COPYRIGHT: © 2025 Marcin Dusinski. All rights reserved.
+    LICENSE: Licensed for authorized use only. Unauthorized distribution is prohibited.
+-->
+<!DOCTYPE html>
+<html lang="no" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Marcin Dusinski">
+    <title>Analyse av Laboratorieresultater</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Biblioteki do generowania PDF i Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; user-select: none; -webkit-user-select: none; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); padding: 1.5rem; }
+        .btn { transition: all 0.2s; }
+        .btn:hover { transform: translateY(-1px); }
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .modal.active { opacity: 1; pointer-events: auto; }
+        .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; max-width: 500px; width: 90%; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); transform: scale(0.9); transition: transform 0.3s; }
+        .modal.active .modal-content { transform: scale(1); }
+
+        #report-content p, #report-content ul { margin-bottom: 1rem; }
+        .drag-over { background-color: #dbeafe !important; border-color: #3b82f6 !important; transform: scale(1.01); }
+        
+        html[dir="rtl"] #separator-checkboxes,
+        html[dir="rtl"] #limits-container { text-align: right; }
+        
+        @media print {
+            body * { visibility: hidden; }
+            #report-section, #report-section * { visibility: visible; }
+            #report-section { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; border: none; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-5xl mx-auto">
+        <div class="card relative shadow-2xl">
+            <!-- Wybór języka -->
+            <div class="absolute top-4 right-4 no-print">
+                <select id="language-selector" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-sm p-1">
+                    <option value="no">Norsk</option>
+                    <option value="en">English</option>
+                    <option value="pl">Polski</option>
+                    <option value="lt">Lietuvių</option>
+                    <option value="ku">Kurdî</option>
+                    <option value="ar">العربية</option>
+                </select>
+            </div>
+
+            <h1 class="text-2xl font-bold text-gray-800 text-center mb-2" data-translate-key="mainTitle">Analyse av Vannprøver fra Oljeutskiller</h1>
+            <p class="text-gray-600 text-center mb-6" data-translate-key="mainSubtitle">Last opp Excel-arket med resultater for å sammenligne dem med de faste grenseverdiene.</p>
+
+            <!-- Krok 1: Limity (Sekcja zwijana) -->
+            <div id="limits-section" class="mb-6 no-print">
+                <button id="toggle-limits-btn" class="flex items-center justify-between w-full text-left text-lg font-semibold text-gray-700 border-b pb-2 hover:bg-gray-50 transition-colors rounded px-2">
+                    <span data-translate-key="step1Title">Steg 1: Faste Grenseverdier (Låst)</span>
+                    <svg id="limits-arrow" class="w-5 h-5 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <div id="limits-container" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 mt-4 hidden bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs">
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Olje, >C10-C40</label><input type="number" data-param="Olje, Fraksjon >C10-C40" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Suspendert stoff</label><input type="number" data-param="Suspendert stoff" class="border p-1 rounded bg-gray-100" value="350" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">pH (min)</label><input type="number" id="limit-ph-min" data-param="pH-verdi" class="border p-1 rounded bg-gray-100" value="6" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">pH (maks)</label><input type="number" id="limit-ph-max" class="border p-1 rounded bg-gray-100" value="9" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Pb (Bly)</label><input type="number" data-param="Pb (Bly)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Cd (Kadmium)</label><input type="number" data-param="Cd (Kadmium)" class="border p-1 rounded bg-gray-100" value="2" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Cu (Kopper)</label><input type="number" data-param="Cu (Kopper)" class="border p-1 rounded bg-gray-100" value="200" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Cr (Krom)</label><input type="number" data-param="Cr (Krom)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Hg (Kvikksølv)</label><input type="number" data-param="Hg (Kvikksølv)" class="border p-1 rounded bg-gray-100" value="2" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Ni (Nikkel)</label><input type="number" data-param="Ni (Nikkel)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Zn (Sink)</label><input type="number" data-param="Zn (Sink)" class="border p-1 rounded bg-gray-100" value="500" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Ag (Sølv)</label><input type="number" data-param="Ag (Sølv)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
+                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">CN (Cyanid)</label><input type="number" data-param="CN (Cyanid)" class="border p-1 rounded bg-gray-100" value="500" disabled></div>
+                </div>
+            </div>
+
+            <!-- Krok 2: Upload -->
+            <div class="mb-6 no-print">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4 border-b pb-2" data-translate-key="step2Title">Steg 2: Last opp Excel-fil</h2>
+                <div id="drop-zone" class="flex flex-col items-center justify-center w-full h-36 border-2 border-blue-300 border-dashed rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100 transition-all shadow-sm relative group">
+                    <div class="flex flex-col items-center justify-center pt-5 pb-6 pointer-events-none">
+                        <svg class="w-10 h-10 mb-3 text-blue-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        <p class="mb-1 text-sm text-blue-700 font-bold" data-translate-key="filePrompt">Klikk for å velge fil eller dra den hit</p>
+                        <p id="file-name" class="text-xs text-blue-500 font-medium">.XLS, .XLSX</p>
+                    </div>
+                    <input id="excel-file" type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"/>
+                </div>
+            </div>
+            
+            <!-- Krok 3: Wybór lokacji -->
+            <div id="separator-selection-section" class="mb-6 hidden no-print">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4 border-b pb-2" data-translate-key="step3Title">Steg 3: Velg lokasjoner å inkludere</h2>
+                
+                <div class="mb-4 flex flex-col md:flex-row gap-2">
+                    <div class="flex-grow">
+                        <input type="text" id="location-search" data-translate-attr="placeholder:searchPlaceholder" placeholder="Søk etter lokasjon..." class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="select-visible-btn" class="px-3 py-2 text-xs font-bold bg-blue-100 text-blue-700 rounded hover:bg-blue-200 border border-blue-200 whitespace-nowrap" data-translate-key="selectVisibleBtn">✓ Velg synlige</button>
+                        <button id="deselect-visible-btn" class="px-3 py-2 text-xs font-bold bg-gray-100 text-gray-700 rounded hover:bg-gray-200 border border-gray-200 whitespace-nowrap" data-translate-key="deselectVisibleBtn">✕ Fjern synlige</button>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded border border-gray-200 mb-4">
+                    <div class="flex items-center mb-4 border-b pb-2 justify-between">
+                        <div class="flex items-center">
+                            <span class="text-sm font-bold text-gray-700" data-translate-key="foundLocations">Funnet lokasjoner:</span>
+                        </div>
+                        <span id="selection-count" class="text-xs text-gray-500 italic">0 valgt</span>
+                    </div>
+                    <div id="separator-checkboxes" class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 max-h-60 overflow-y-auto pr-2">
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <button id="generate-report-btn" class="btn btn-primary font-bold py-3 px-8 rounded-lg shadow-lg text-lg w-full md:w-auto" data-translate-key="generateReportBtn">
+                        Generer samlerapport
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Sekcja Raportu -->
+            <div id="report-section" class="mt-8 hidden">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 text-center" data-translate-key="reportTitle">Melding til Kunde</h2>
+                <div id="report-content" class="p-6 border border-gray-300 rounded-lg bg-white text-gray-800 shadow-inner">
+                </div>
+                <div class="mt-6 flex justify-center gap-4 no-print">
+                    <button id="print-btn" class="btn bg-gray-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-700" data-translate-key="printBtn">Skriv ut</button>
+                    <button id="download-pdf-btn" class="btn bg-blue-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600" data-translate-key="downloadPdfBtn">Lagre som PDF</button>
+                </div>
+            </div>
+
+            <div id="error-message" class="mt-4 text-center text-red-600 font-medium hidden p-3 bg-red-50 rounded border border-red-200"></div>
+
+            <!-- Stopka Programu -->
+            <div id="app-footer" class="flex flex-col items-center justify-center mt-12 pb-4 border-t border-gray-200 pt-4 no-print gap-2">
+                <div class="text-center text-gray-400 text-xs">Utviklet av <span class="font-bold text-gray-600">Marcin Dusinski</span> &copy; 2025</div>
+                <button id="open-license-btn" class="text-xs text-blue-500 hover:underline mt-2">Lisens / Om programmet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Licencji -->
+    <div id="license-modal" class="modal no-print">
+        <div class="modal-content relative">
+            <button id="close-license-btn" class="absolute top-2 right-2 text-gray-500 hover:text-gray-800"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            <h2 class="text-xl font-bold mb-4 text-gray-800">Lisens / Licencja</h2>
+            <div class="text-sm text-gray-600 space-y-4">
+                <p><strong>Utvikler / Twórca:</strong> Marcin Dusinski</p>
+                <p><strong>Copyright &copy; 2025</strong></p>
+                <p class="text-xs text-gray-400 mt-4">Version 2.7 | Release Build (ALS)</p>
+                
+                <div class="mt-4 p-3 bg-red-50 border border-red-100 rounded text-xs text-red-800">
+                    <p class="font-bold mb-1" data-translate-key="legalTitle">Juridisk Advarsel / Nota Prawna</p>
+                    <p data-translate-key="legalText">Dette programmet er beskyttet av opphavsrett. Kommersiell bruk, redistribusjon eller salg uten skriftlig samtykke fra opphavsrettsinnehaveren er strengt forbudt.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const translations = {
+            no: {
+                mainTitle: "Analyse av Vannprøver fra Oljeutskiller",
+                mainSubtitle: "Last opp Excel-arket med resultater for å sammenligne dem med de faste grenseverdiene.",
+                step1Title: "Steg 1: Faste Grenseverdier (Låst)",
+                step2Title: "Steg 2: Last opp Excel-fil",
+                step3Title: "Steg 3: Velg lokasjoner å inkludere",
+                filePrompt: "Klikk for å velge fil eller dra den hit",
+                fileType: ".XLS, .XLSX",
+                generateReportBtn: "Generer samlerapport",
+                reportTitle: "Melding til Kunde",
+                printBtn: "Skriv ut",
+                downloadPdfBtn: "Lagre som PDF",
+                savingPdfBtn: "Lagrer...",
+                searchPlaceholder: "Søk etter lokasjon...",
+                selectVisibleBtn: "✓ Velg synlige",
+                deselectVisibleBtn: "✕ Fjern synlige",
+                foundLocations: "Funnet lokasjoner:",
+                selectedCount: "valgt",
+                legalTitle: "Juridisk Advarsel",
+                legalText: "Dette programmet er beskyttet av opphavsrett. Kommersiell bruk, redistribusjon eller salg uten skriftlig samtykke fra opphavsrettsinnehaveren er strengt forbudt.",
+                report_hello: "Hei,",
+                report_sampling_date: "Prøvetakingsdato:",
+                report_intro1: "Sender over analyseresultater på deres oljeutskiller i forbindelse med vann som renner igjennom til kommunalt nett.",
+                report_intro2: "Ved utslipp/påslipp til kommunalt nett er det i forurensningsforskriften satt krav om at oljenivået i vann skal være under 50 mg/l. Andre parametere eller strengere krav til oljenivå kan stilles i utslipp-/påslippstillatelsen eller fra kommunen.",
+                report_oil_results_text: "Resultatet for «olje-i-vann» er",
+                report_all_ok: "Resultatene vedrørende tungmetaller, pH, suspendert stoff, ser OK ut i forhold til grenseverdiene/krav som er satt av myndigheter og IVAR.",
+                report_exceedances_intro: "Resultatene vedrørende tungmetaller, pH, suspendert stoff, ser vi at dere ligger over noen av grenseverdiene/krav som er satt av myndigheter og IVAR. Det gjelder følgende:",
+                report_consultation1: "Hvis du ønsker det så kan vi få en salgskonsulent til å gå igjennom dette på et møte, og eventuelt diskutere om dere ønsker at SAR AS skal bidra med hjelp til å finne løsninger for at dere kommer under disse kravene.",
+                report_consultation2: "I tillegg så har vi egne miljørådgivere (konsulenter) som kan være behjelpelige opp mot myndigheter etc.",
+                report_location_intro: "Resultater for lokasjon:",
+                report_measured_value: "målt verdi",
+                report_requirement: "krav:",
+                report_over_by: "overskredet med",
+                report_under_by: "under med",
+                report_see_attachment: "Se vedlegg.",
+                report_copyright: "Opphavsrett © 2025 Marcin Dusinski. Alle rettigheter forbeholdt.",
+                table_param: "Parameter",
+                table_unit: "Enhet",
+                table_measured: "Målt verdi",
+                table_limit: "Grense",
+                table_status: "Status",
+                status_ok: "Innenfor grensen",
+                status_exceeded: "Overskredet",
+                error_select_location: "Vennligst velg minst én lokasjon.",
+                error_no_header: "Fant ikke header i filen.",
+                error_invalid_file: "Vennligst velg en gyldig Excel-fil (.xlsx eller .xls)."
+            },
+            en: {
+                mainTitle: "Oil Separator Water Analysis",
+                mainSubtitle: "Upload Excel results to compare with fixed limits.",
+                step1Title: "Step 1: Fixed Limits (Locked)",
+                step2Title: "Step 2: Upload Excel File",
+                step3Title: "Step 3: Select locations to include",
+                filePrompt: "Click to select file or drag it here",
+                fileType: ".XLS, .XLSX",
+                generateReportBtn: "Generate Report",
+                reportTitle: "Message to Customer",
+                printBtn: "Print",
+                downloadPdfBtn: "Save as PDF",
+                savingPdfBtn: "Saving...",
+                searchPlaceholder: "Search location...",
+                selectVisibleBtn: "✓ Select visible",
+                deselectVisibleBtn: "✕ Deselect visible",
+                foundLocations: "Found locations:",
+                selectedCount: "selected",
+                legalTitle: "Legal Notice",
+                legalText: "Copyright © 2025. Unauthorized use or distribution is prohibited.",
+                report_hello: "Hello,",
+                report_sampling_date: "Sampling Date:",
+                report_intro1: "We are sending results for your oil separator water analysis.",
+                report_intro2: "Regulations require oil levels below 50 mg/l for municipal discharge. Stricter requirements may apply according to local permits or municipality rules.",
+                report_oil_results_text: "The result for 'oil-in-water' is",
+                report_all_ok: "Results for heavy metals, pH, and solids look OK according to requirements set by authorities and IVAR.",
+                report_exceedances_intro: "We found exceedances for the following parameters according to requirements:",
+                report_consultation1: "If you wish, we can have a sales consultant review this in a meeting to discuss solutions together with SAR AS.",
+                report_consultation2: "We also have environmental consultants who can assist with authorities and regulatory matters.",
+                report_location_intro: "Results for location:",
+                report_measured_value: "measured",
+                report_requirement: "requirement:",
+                report_over_by: "over by",
+                report_under_by: "under by",
+                report_see_attachment: "See attachment.",
+                report_copyright: "Copyright © 2025 Marcin Dusinski. All rights reserved.",
+                table_param: "Parameter",
+                table_unit: "Unit",
+                table_measured: "Value",
+                table_limit: "Limit",
+                table_status: "Status",
+                status_ok: "Within limit",
+                status_exceeded: "Exceeded",
+                error_select_location: "Please select at least one location.",
+                error_no_header: "Header not found.",
+                error_invalid_file: "Select a valid Excel file."
+            },
+            pl: {
+                mainTitle: "Analiza Wody z Separatora Oleju",
+                mainSubtitle: "Wgraj arkusz Excel, aby porównać wyniki ze stałymi limitami.",
+                step1Title: "Krok 1: Stałe Wartości Graniczne (Zablokowane)",
+                step2Title: "Krok 2: Wgraj plik Excel",
+                step3Title: "Krok 3: Wybierz lokalizacje",
+                filePrompt: "Kliknij, aby wybrać plik lub przeciągnij go tutaj",
+                fileType: ".XLS, .XLSX",
+                generateReportBtn: "Generuj raport zbiorczy",
+                reportTitle: "Wiadomość dla Klienta",
+                printBtn: "Drukuj",
+                downloadPdfBtn: "Zapisz jako PDF",
+                savingPdfBtn: "Zapisywanie...",
+                searchPlaceholder: "Szukaj lokalizacji...",
+                selectVisibleBtn: "✓ Zaznacz widoczne",
+                deselectVisibleBtn: "✕ Odznacz widoczne",
+                foundLocations: "Wykryte lokalizacje:",
+                selectedCount: "wybrano",
+                legalTitle: "Nota Prawna",
+                legalText: "Oprogramowanie chronione prawem autorskim. Użytek komercyjny bez zgody jest zabroniony.",
+                report_hello: "Dzień dobry,",
+                report_sampling_date: "Data pobrania próbki:",
+                report_intro1: "Przesyłamy wyniki analizy separatora oleju w związku z wodą odprowadzaną do sieci miejskiej.",
+                report_intro2: "Zgodnie z przepisami, poziom oleju w wodzie odprowadzanej do sieci miejskiej musi być poniżej 50 mg/l. Lokalne pozwolenia mogą określać surowsze wymogi.",
+                report_oil_results_text: "Wynik dla «oleju w wodzie» wynosi",
+                report_all_ok: "Wyniki dotyczące metali ciężkich, pH i zawiesiny są w normie zgodnie z wymogami władz i IVAR.",
+                report_exceedances_intro: "Odnotowano przekroczenia norm dla następujących parametrów:",
+                report_consultation1: "Jeśli Państwo sobie życzą, nasz konsultant handlowy może omówić wyniki na spotkaniu i przedyskutować rozwiązania oferowane przez SAR AS.",
+                report_consultation2: "Nasi doradcy środowiskowi mogą również pomóc w kontaktach z urzędami i organami regulacyjnymi.",
+                report_location_intro: "Wyniki dla lokalizacji:",
+                report_measured_value: "zmierzona",
+                report_requirement: "wymóg:",
+                report_over_by: "ponad o",
+                report_under_by: "poniżej o",
+                report_see_attachment: "Patrz załącznik.",
+                report_copyright: "Copyright © 2025 Marcin Dusinski. Wszystkie prawa zastrzeżone.",
+                table_param: "Parametr",
+                table_unit: "Jedn.",
+                table_measured: "Wartość",
+                table_limit: "Granica",
+                table_status: "Status",
+                status_ok: "W normie",
+                status_exceeded: "Przekroczono",
+                error_select_location: "Wybierz lokalizację.",
+                error_no_header: "Nie znaleziono nagłówka.",
+                error_invalid_file: "Wybierz poprawny plik Excel."
+            },
+            lt: {
+                mainTitle: "Vandens mėginių analizė",
+                mainSubtitle: "Įkelkite „Excel“ rezultatus ir palyginkite su ribomis.",
+                step1Title: "1 žingsnis: Ribos (Užrakinta)",
+                step2Title: "2 žingsnis: Įkelti failą",
+                step3Title: "3 žingsnis: Pasirinkite vietas",
+                filePrompt: "Spustelėkite failą arba vilkite jį čia",
+                searchPlaceholder: "Ieškoti...",
+                selectVisibleBtn: "✓ Pasirinkti matomus",
+                deselectVisibleBtn: "✕ Atšaukti matomus",
+                foundLocations: "Rastos vietos:",
+                selectedCount: "pasirinkta",
+                generateReportBtn: "Generuoti ataskaitą",
+                reportTitle: "Pranešimas klientui",
+                printBtn: "Spausdinti",
+                downloadPdfBtn: "Išsaugoti PDF",
+                report_hello: "Sveiki,",
+                report_sampling_date: "Mėginio data:",
+                report_intro1: "Siunčiame jūsų vandens separatoriaus analizės rezultatus.",
+                report_intro2: "Pagal reglamentus naftos kiekis vandenyje turi būti mažesnis nei 50 mg/l.",
+                report_oil_results_text: "„Naftos vandenyje“ rezultatas yra",
+                report_all_ok: "Visi rezultatai (metalo, pH, kietųjų dalelių) atitinka normas.",
+                report_exceedances_intro: "Rasti viršijimai šiems parametrams:",
+                report_consultation1: "Jei pageidaujate, galime aptarti sprendimus susitikime.",
+                report_consultation2: "Mūsų konsultantai gali padėti su institucijomis.",
+                report_location_intro: "Vietos rezultatai:",
+                report_measured_value: "vertė",
+                report_requirement: "reikalavimas:",
+                report_over_by: "viršyta",
+                report_under_by: "mažiau",
+                report_see_attachment: "Žr. priedą.",
+                report_copyright: "Autorių teisės © 2025 Marcin Dusinski. Visos teisės saugomos.",
+                table_param: "Parametras",
+                table_unit: "Vienetas",
+                table_measured: "Vertė",
+                table_limit: "Riba",
+                table_status: "Būsena",
+                status_ok: "Norma",
+                status_exceeded: "Viršyta"
+            },
+            ku: {
+                mainTitle: "Analîza Nimûneyên Avê",
+                mainSubtitle: "Pelê Excel bar bikin ji bo dîtina encaman.",
+                step1Title: "Gava 1: Sînorên Diyarkirî",
+                step2Title: "Gava 2: Pelê Excel Bar Bikin",
+                step3Title: "Gava 3: Cihan Hilbijêrin",
+                filePrompt: "Pel hilbijêrin an bikişînin vir",
+                searchPlaceholder: "Lêgerîn...",
+                selectVisibleBtn: "✓ Yên xuyayî hilbijêre",
+                deselectVisibleBtn: "✕ Yên xuyayî rake",
+                foundLocations: "Cihên hatine dîtin:",
+                selectedCount: "hatî bijartin",
+                generateReportBtn: "Raporê Çêbike",
+                reportTitle: "Peyam ji bo Xerîdar",
+                printBtn: "Çap bike",
+                downloadPdfBtn: "Wek PDF tomar bike",
+                report_hello: "Silav,",
+                report_sampling_date: "Dîroka nimûneyê:",
+                report_intro1: "Em encamên analîza avê ya we dişînin.",
+                report_intro2: "Pêwîst e asta rûnê di avê de di bin 50 mg/l de be.",
+                report_oil_results_text: "Encama «rûn-di-avê de» ev e",
+                report_all_ok: "Encamên metal û pH li gorî pîvanan baş in.",
+                report_exceedances_intro: "Ji bo van parametreyan zêdebûn hat dîtin:",
+                report_consultation1: "Heke hûn bixwazin em dikarin civînekê bikin.",
+                report_consultation2: "Şêwirmendên me dikarin alîkariya we bikin.",
+                report_location_intro: "Encamên cih:",
+                report_measured_value: "nirx",
+                report_requirement: "pêdivî:",
+                report_over_by: "zêdetir bi",
+                report_under_by: "kêmtir bi",
+                report_see_attachment: "Pêvekê bibînin.",
+                report_copyright: "Mafên telîfê © 2025 Marcin Dusinski.",
+                table_param: "Parametre",
+                table_unit: "Yeke",
+                table_measured: "Nirx",
+                table_limit: "Sînor",
+                table_status: "Rewş",
+                status_ok: "BAŞ",
+                status_exceeded: "ZÊDE BÛ"
+            },
+            ar: {
+                mainTitle: "تحليل عينات المياه",
+                mainSubtitle: "قم بتحميل ملف Excel للمقارنة مع الحدود الثابتة.",
+                step1Title: "الخطوة 1: الحدود الثابتة (مغلق)",
+                step2Title: "الخطوة 2: تحميل ملف Excel",
+                step3Title: "الخطوة 3: اختر المواقع",
+                filePrompt: "انقر لاختيار ملف أو اسحبه هنا",
+                searchPlaceholder: "البحث عن موقع...",
+                selectVisibleBtn: "✓ اختيار الظاهر",
+                deselectVisibleBtn: "✕ إلغاء الظاهر",
+                foundLocations: "المواقع الموجودة:",
+                selectedCount: "مختار",
+                generateReportBtn: "إنشاء التقرير",
+                reportTitle: "رسالة للعميل",
+                printBtn: "طباعة",
+                downloadPdfBtn: "حفظ بصيغة PDF",
+                report_hello: "مرحباً،",
+                report_sampling_date: "تاريخ العينة:",
+                report_intro1: "نرسل لكم نتائج تحليل فاصل الزيت الخاص بكم.",
+                report_intro2: "تتطلب اللوائح أن يكون مستوى الزيت في الماء أقل من 50 مجم/لتر.",
+                report_oil_results_text: "نتيجة «الزيت في الماء» هي",
+                report_all_ok: "نتائج المعادن والحموضة تبdou جيدة وفقاً للمتطلبات.",
+                report_exceedances_intro: "وجدنا تجاوزات للمعايير التالية:",
+                report_consultation1: "إذا رغبتم، يمكننا ترتيب اجتماع لمناقشة الحلول.",
+                report_consultation2: "استشاريونا متاحون للمساعدة في الأمور التنظيمية.",
+                report_location_intro: "نتائج الموقع:",
+                report_measured_value: "القيمة",
+                report_requirement: "المتطلب:",
+                report_over_by: "زيادة بمقدار",
+                report_under_by: "نقص بمقدار",
+                report_see_attachment: "انظر المرفق.",
+                report_copyright: "حقوق الطبع والنشر © 2025 Marcin Dusinski.",
+                table_param: "المعلمة",
+                table_unit: "الوحدة",
+                table_measured: "القيمة",
+                table_limit: "الحد",
+                table_status: "الحالة",
+                status_ok: "موافق",
+                status_exceeded: "تجاوز"
+            }
+        };
+
+        let currentLang = 'no';
+        let parsedExcelData = null;
+        let headerRowIndex = -1;
+        let currentReportData = null;
+        
+        const langSelector = document.getElementById('language-selector');
+        langSelector.addEventListener('change', (e) => changeLanguage(e.target.value));
+
+        // Obsługa modala licencji
+        const licenseModal = document.getElementById('license-modal');
+        document.getElementById('open-license-btn').onclick = () => licenseModal.classList.add('active');
+        document.getElementById('close-license-btn').onclick = () => licenseModal.classList.remove('active');
+        licenseModal.onclick = (e) => { if(e.target === licenseModal) licenseModal.classList.remove('active'); };
+
+        // Obsługa zwijania limitów
+        const toggleLimitsBtn = document.getElementById('toggle-limits-btn');
+        const limitsContainer = document.getElementById('limits-container');
+        const limitsArrow = document.getElementById('limits-arrow');
+        toggleLimitsBtn.onclick = () => {
+            limitsContainer.classList.toggle('hidden');
+            limitsArrow.classList.toggle('rotate-180');
+        };
+
+        function changeLanguage(lang) {
+            if (!translations[lang]) return;
+            currentLang = lang;
+            const isRTL = lang === 'ar' || lang === 'ku';
+            document.documentElement.lang = lang;
+            document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
+
+            document.querySelectorAll('[data-translate-key]').forEach(el => {
+                const key = el.dataset.translateKey;
+                if (translations[lang][key]) el.textContent = translations[lang][key];
+            });
+
+            document.querySelectorAll('[data-translate-attr]').forEach(el => {
+                const attrData = el.dataset.translateAttr.split(':');
+                const attrName = attrData[0];
+                const key = attrData[1];
+                if (translations[lang][key]) el.setAttribute(attrName, translations[lang][key]);
+            });
+
+            updateSelectionCount();
+            if (currentReportData) generateAndDisplayReport(currentReportData.allResults);
+        }
+
+        const excelFileInput = document.getElementById('excel-file');
+        const fileNameDisplay = document.getElementById('file-name');
+        const errorMessageDiv = document.getElementById('error-message');
+        const separatorSelectionSection = document.getElementById('separator-selection-section');
+        const separatorCheckboxesContainer = document.getElementById('separator-checkboxes');
+        const reportSection = document.getElementById('report-section');
+        const reportContent = document.getElementById('report-content');
+        const locSearch = document.getElementById('location-search');
+        const selectionCountDisplay = document.getElementById('selection-count');
+        const dropZone = document.getElementById('drop-zone');
+
+        // Obsługa Drag & Drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.add('drag-over');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.remove('drag-over');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const file = dt.files[0];
+            handleFile(file);
+        }, false);
+
+        excelFileInput.onchange = (e) => handleFile(e.target.files[0]);
+
+        function handleFile(file) {
+            if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+                fileNameDisplay.textContent = file.name;
+                resetView();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    parsedExcelData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    detectSeparators();
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                showError(translations[currentLang].error_invalid_file);
+            }
+        }
+
+        function detectSeparators() {
+            headerRowIndex = -1;
+            for(let i = 0; i < parsedExcelData.length; i++) {
+                if(parsedExcelData[i][0] && String(parsedExcelData[i][0]).trim().toUpperCase() === 'ELEMENT') {
+                    headerRowIndex = i;
+                    break;
+                }
+            }
+
+            if (headerRowIndex === -1) {
+                showError(translations[currentLang].error_no_header);
+                return;
+            }
+
+            const headerRow = parsedExcelData[headerRowIndex];
+            separatorCheckboxesContainer.innerHTML = '';
+            let count = 0;
+
+            for (let i = 2; i < headerRow.length; i++) {
+                const name = String(headerRow[i] || '').trim();
+                if (name !== '') {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center loc-item-row p-1 hover:bg-white rounded transition-colors border border-transparent hover:border-gray-200';
+                    div.innerHTML = `
+                        <input type="checkbox" id="sep-${i}" value="${i}" data-name="${name}" checked class="h-4 w-4 text-blue-600 rounded border-gray-300">
+                        <label for="sep-${i}" class="ml-2 text-sm text-gray-700 cursor-pointer truncate font-medium">${name}</label>
+                    `;
+                    div.querySelector('input').addEventListener('change', updateSelectionCount);
+                    separatorCheckboxesContainer.appendChild(div);
+                    count++;
+                }
+            }
+
+            if (count > 0) {
+                separatorSelectionSection.classList.remove('hidden');
+                updateSelectionCount();
+            }
+        }
+
+        function updateSelectionCount() {
+            const checked = document.querySelectorAll('#separator-checkboxes input:checked').length;
+            const label = translations[currentLang].selectedCount || 'valgt';
+            selectionCountDisplay.textContent = `${checked} ${label}`;
+        }
+
+        locSearch.oninput = (e) => {
+            const val = e.target.value.toLowerCase();
+            document.querySelectorAll('.loc-item-row').forEach(row => {
+                const name = row.querySelector('label').textContent.toLowerCase();
+                row.classList.toggle('hidden', !name.includes(val));
+            });
+        };
+
+        document.getElementById('select-visible-btn').onclick = () => {
+            document.querySelectorAll('.loc-item-row:not(.hidden) input').forEach(cb => cb.checked = true);
+            updateSelectionCount();
+        };
+        document.getElementById('deselect-visible-btn').onclick = () => {
+            document.querySelectorAll('.loc-item-row:not(.hidden) input').forEach(cb => cb.checked = false);
+            updateSelectionCount();
+        };
+
+        document.getElementById('generate-report-btn').onclick = () => {
+            const selected = Array.from(document.querySelectorAll('#separator-checkboxes input:checked')).map(cb => ({
+                name: cb.dataset.name,
+                columnIndex: parseInt(cb.value)
+            }));
+
+            if (selected.length === 0) {
+                showError(translations[currentLang].error_select_location);
+                return;
+            }
+
+            const results = selected.map(sep => analyzeLocation(sep));
+            currentReportData = { allResults: results };
+            generateAndDisplayReport(results);
+            reportSection.scrollIntoView({ behavior: 'smooth' });
+        };
+
+        function analyzeLocation(sep) {
+            const limits = getLimits();
+            const data = [];
+            let samplingDate = 'N/A';
+            let exceedances = 0;
+
+            for (let i = 0; i < parsedExcelData.length; i++) {
+                const first = String(parsedExcelData[i][0] || '').toLowerCase();
+                if (first.includes('sampling date') || first.includes('prøvetakingsdato')) {
+                    samplingDate = parsedExcelData[i][sep.columnIndex] || 'N/A';
+                    break;
+                }
+            }
+
+            for (let i = headerRowIndex + 1; i < parsedExcelData.length; i++) {
+                const row = parsedExcelData[i];
+                if (!row[0]) continue;
+                const param = String(row[0]).trim();
+                const normParam = param.toLowerCase().replace(/[\s,()>\-]/g, '');
+                const unit = row[1] || '';
+                let valStr = String(row[sep.columnIndex] || '').replace(',', '.').replace('<', '').trim();
+                const val = parseFloat(valStr);
+                const limit = limits[normParam];
+
+                if (limit !== undefined && !isNaN(val)) {
+                    let ok = false;
+                    let limTxt = '';
+                    if (typeof limit === 'object') {
+                        ok = val >= limit.min && val <= limit.max;
+                        limTxt = `${limit.min}-${limit.max}`;
+                    } else {
+                        ok = val <= limit;
+                        limTxt = `≤ ${limit}`;
+                    }
+                    if (!ok) exceedances++;
+                    data.push({ param, unit, val, limTxt, ok, limitRaw: limit });
+                }
+            }
+            return { name: sep.name, date: samplingDate, items: data, totalExceed: exceedances };
+        }
+
+        function generateAndDisplayReport(allResults) {
+            const T = translations[currentLang];
+            let html = `<div class="space-y-8">
+                <p class="font-medium">${T.report_hello}</p>
+                <p>${T.report_intro1}</p>
+                <p>${T.report_intro2}</p>`;
+
+            let anyExceedancesOverall = false;
+
+            allResults.forEach(res => {
+                if (res.totalExceed > 0) anyExceedancesOverall = true;
+
+                html += `
+                <div class="border-t pt-6">
+                    <h3 class="text-lg font-bold text-blue-800 mb-1">${T.report_location_intro} ${res.name}</h3>
+                    <p class="text-xs text-gray-500 italic mb-4">${T.report_sampling_date} ${res.date}</p>
+                `;
+
+                // Rezultat oleju - inteligentne kolorowanie całej linii na zielono jeśli OK
+                const oilItem = res.items.find(i => i.param.toLowerCase().replace(/[\s,()>\-]/g, '') === 'oljefraksjonc10c40');
+                if (oilItem) {
+                    if (oilItem.ok) {
+                        html += `<p class="text-green-600 font-medium">${T.report_oil_results_text} <span class="font-bold">${oilItem.val.toFixed(2)} ${oilItem.unit}</span>.</p>`;
+                    } else {
+                        html += `<p>${T.report_oil_results_text} <span class="text-red-600 font-bold">${oilItem.val.toFixed(2)} ${oilItem.unit}</span>.</p>`;
+                    }
+                }
+
+                if (res.totalExceed > 0) {
+                    html += `<p class="text-gray-700 mb-2">${T.report_exceedances_intro}</p><ul class="list-disc list-inside text-sm mb-4">`;
+                    res.items.filter(i => !i.ok).forEach(i => {
+                        let diffText = "";
+                        if (typeof i.limitRaw === 'object' && i.limitRaw.min !== undefined) {
+                            const diff = i.val > i.limitRaw.max ? (i.val - i.limitRaw.max) : (i.limitRaw.min - i.val);
+                            const ref = i.val > i.limitRaw.max ? i.limitRaw.max : i.limitRaw.min;
+                            const percent = (diff / ref) * 100;
+                            const label = i.val > i.limitRaw.max ? T.report_over_by : T.report_under_by;
+                            diffText = ` (<span class="text-red-600 font-bold">${label} ${diff.toFixed(2)} ${i.unit}</span>, <span class="text-red-600 font-bold">${percent.toFixed(0)}%</span>)`;
+                        } else {
+                            const diff = i.val - i.limitRaw;
+                            const percent = (diff / i.limitRaw) * 100;
+                            diffText = ` (<span class="text-red-600 font-bold">${T.report_over_by} ${diff.toFixed(2)} ${i.unit}</span>, <span class="text-red-600 font-bold">${percent.toFixed(0)}%</span>)`;
+                        }
+                        html += `<li><strong>${i.param}:</strong> <span class="text-red-600 font-bold">${i.val.toFixed(2)} ${i.unit}</span>, ${T.report_requirement} ${i.limTxt} ${i.unit}${diffText}</li>`;
+                    });
+                    html += `</ul>`;
+                } else {
+                    html += `<p class="text-green-600 font-medium mb-4">${T.report_all_ok}</p>`;
+                }
+
+                html += `
+                    <div class="overflow-x-auto shadow-sm border rounded-lg">
+                        <table class="min-w-full text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="border-b p-2 text-left w-5/12">${T.table_param}</th>
+                                    <th class="border-b p-2 text-center w-1/12">${T.table_unit}</th>
+                                    <th class="border-b p-2 text-center w-2/12">${T.table_measured}</th>
+                                    <th class="border-b p-2 text-center w-2/12">${T.table_limit}</th>
+                                    <th class="border-b p-2 text-center w-2/12">${T.table_status}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                res.items.forEach(i => {
+                    html += `
+                        <tr class="${i.ok ? '' : 'bg-red-50'} hover:bg-gray-50 transition-colors">
+                            <td class="border-b p-2 font-medium">${i.param}</td>
+                            <td class="border-b p-2 text-center text-gray-500">${i.unit}</td>
+                            <td class="border-b p-2 text-center font-bold">${i.val.toFixed(2)}</td>
+                            <td class="border-b p-2 text-center text-gray-600">${i.limTxt}</td>
+                            <td class="border-b p-2 text-center font-bold ${i.ok ? 'text-green-600' : 'text-red-600'}">${i.ok ? T.status_ok : T.status_exceeded}</td>
+                        </tr>
+                    `;
+                });
+                html += `</tbody></table></div></div>`;
+            });
+
+            if (anyExceedancesOverall) {
+                html += `
+                <div class="mt-8 pt-4 border-t space-y-4 text-sm">
+                    <p>${T.report_consultation1}</p>
+                    <p>${T.report_consultation2}</p>
+                </div>`;
+            }
+
+            html += `<p class="mt-4 text-sm">${T.report_see_attachment}</p>`;
+            html += `<div class="mt-12 pt-4 border-t border-gray-100 text-center text-[8px] text-gray-300 font-light uppercase tracking-widest">${T.report_copyright}</div></div>`;
+            
+            reportContent.innerHTML = html;
+            reportSection.classList.remove('hidden');
+        }
+
+        function getLimits() {
+            const l = {};
+            l['phverdi'] = { min: parseFloat(document.getElementById('limit-ph-min').value), max: parseFloat(document.getElementById('limit-ph-max').value) };
+            document.querySelectorAll('#limits-container input[data-param]').forEach(input => {
+                if(input.id.includes('ph')) return;
+                const norm = input.dataset.param.toLowerCase().replace(/[\s,()>\-]/g, '');
+                l[norm] = parseFloat(input.value);
+            });
+            return l;
+        }
+
+        function resetView() {
+            separatorSelectionSection.classList.add('hidden');
+            reportSection.classList.add('hidden');
+            errorMessageDiv.classList.add('hidden');
+            separatorCheckboxesContainer.innerHTML = '';
+            locSearch.value = '';
+            updateSelectionCount();
+        }
+
+        function showError(msg) {
+            errorMessageDiv.textContent = msg;
+            errorMessageDiv.classList.remove('hidden');
+        }
+
+        document.getElementById('print-btn').onclick = () => window.print();
+
+        document.getElementById('download-pdf-btn').onclick = function() {
+            const btn = this;
+            const originalText = btn.textContent;
+            btn.textContent = translations[currentLang].savingPdfBtn || "Saving...";
+            btn.disabled = true;
+
+            html2canvas(reportContent, { scale: 1.8, useCORS: true }).then(canvas => {
+                const imgData = canvas.toDataURL('image/jpeg', 0.85);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: [canvas.width, canvas.height] });
+                pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+                pdf.save(`Rapport_${new Date().toISOString().slice(0,10)}.pdf`);
+                btn.textContent = originalText;
+                btn.disabled = false;
+            });
+        };
+
+        changeLanguage('no');
+    });
+    </script>
+</body>
+</html>
