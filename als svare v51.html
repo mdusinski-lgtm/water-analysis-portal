@@ -12,14 +12,49 @@
     <meta name="author" content="Marcin Dusinski">
     <title>Analyse av Laboratorieresultater</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Biblioteki do generowania PDF i Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; user-select: none; -webkit-user-select: none; }
-        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); padding: 1.5rem; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            user-select: none; 
+            -webkit-user-select: none; 
+            background-color: #f1f5f9;
+            margin: 0;
+            position: relative;
+            min-height: 100vh;
+        }
+
+        /* Maksymalne logo SAR AS - spójne z index.html */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 170%; 
+            height: 170%;
+            background-image: url('SAR-sargruppen-logo.png');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+            opacity: 0.20; 
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .card { 
+            background-color: rgba(255, 255, 255, 0.65); /* Przezroczystość dla efektu prześwitywania logo */
+            backdrop-filter: blur(8px); 
+            border-radius: 0.75rem; 
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); 
+            padding: 1.5rem; 
+            position: relative;
+            z-index: 10;
+        }
+
         .btn { transition: all 0.2s; }
         .btn:hover { transform: translateY(-1px); }
         .btn-primary { background-color: #3b82f6; color: white; }
@@ -37,17 +72,17 @@
         html[dir="rtl"] #limits-container { text-align: right; }
         
         @media print {
+            body::before { display: none; } /* Ukrywamy wielkie logo w druku */
             body * { visibility: hidden; }
             #report-section, #report-section * { visibility: visible; }
-            #report-section { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; border: none; }
+            #report-section { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; border: none; background: white; }
             .no-print { display: none !important; }
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-5xl mx-auto">
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div id="main-container" class="w-full max-w-5xl mx-auto">
         <div class="card relative shadow-2xl">
-            <!-- Wybór języka -->
             <div class="absolute top-4 right-4 no-print">
                 <select id="language-selector" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-sm p-1">
                     <option value="no">Norsk</option>
@@ -59,67 +94,64 @@
                 </select>
             </div>
 
-            <h1 class="text-2xl font-bold text-gray-800 text-center mb-2" data-translate-key="mainTitle">Analyse av Vannprøver fra Oljeutskiller</h1>
-            <p class="text-gray-600 text-center mb-6" data-translate-key="mainSubtitle">Last opp Excel-arket med resultater for å sammenligne dem med de faste grenseverdiene.</p>
+            <h1 class="text-2xl font-bold text-gray-900 text-center mb-2" data-translate-key="mainTitle">Analyse av Vannprøver fra Oljeutskiller</h1>
+            <p class="text-gray-700 text-center mb-6 font-medium" data-translate-key="mainSubtitle">Last opp Excel-arket med resultater for å sammenligne dem med de faste grenseverdiene.</p>
 
-            <!-- Krok 1: Limity (Sekcja zwijana) -->
             <div id="limits-section" class="mb-6 no-print">
-                <button id="toggle-limits-btn" class="flex items-center justify-between w-full text-left text-lg font-semibold text-gray-700 border-b pb-2 hover:bg-gray-50 transition-colors rounded px-2">
+                <button id="toggle-limits-btn" class="flex items-center justify-between w-full text-left text-lg font-semibold text-gray-800 border-b pb-2 hover:bg-gray-50/50 transition-colors rounded px-2">
                     <span data-translate-key="step1Title">Steg 1: Faste Grenseverdier (Låst)</span>
                     <svg id="limits-arrow" class="w-5 h-5 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
                 </button>
-                <div id="limits-container" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 mt-4 hidden bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs">
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Olje, >C10-C40</label><input type="number" data-param="Olje, Fraksjon >C10-C40" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Suspendert stoff</label><input type="number" data-param="Suspendert stoff" class="border p-1 rounded bg-gray-100" value="350" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">pH (min)</label><input type="number" id="limit-ph-min" data-param="pH-verdi" class="border p-1 rounded bg-gray-100" value="6" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">pH (maks)</label><input type="number" id="limit-ph-max" class="border p-1 rounded bg-gray-100" value="9" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Pb (Bly)</label><input type="number" data-param="Pb (Bly)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Cd (Kadmium)</label><input type="number" data-param="Cd (Kadmium)" class="border p-1 rounded bg-gray-100" value="2" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Cu (Kopper)</label><input type="number" data-param="Cu (Kopper)" class="border p-1 rounded bg-gray-100" value="200" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Cr (Krom)</label><input type="number" data-param="Cr (Krom)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Hg (Kvikksølv)</label><input type="number" data-param="Hg (Kvikksølv)" class="border p-1 rounded bg-gray-100" value="2" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Ni (Nikkel)</label><input type="number" data-param="Ni (Nikkel)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Zn (Sink)</label><input type="number" data-param="Zn (Sink)" class="border p-1 rounded bg-gray-100" value="500" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">Ag (Sølv)</label><input type="number" data-param="Ag (Sølv)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
-                    <div class="flex flex-col"><label class="font-medium text-gray-700 mb-1">CN (Cyanid)</label><input type="number" data-param="CN (Cyanid)" class="border p-1 rounded bg-gray-100" value="500" disabled></div>
+                <div id="limits-container" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 mt-4 hidden bg-white/50 p-3 rounded-lg border border-gray-200 text-xs">
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">Olje, >C10-C40</label><input type="number" data-param="Olje, Fraksjon >C10-C40" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">Suspendert stoff</label><input type="number" data-param="Suspendert stoff" class="border p-1 rounded bg-gray-100" value="350" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">pH (min)</label><input type="number" id="limit-ph-min" data-param="pH-verdi" class="border p-1 rounded bg-gray-100" value="6" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">pH (maks)</label><input type="number" id="limit-ph-max" class="border p-1 rounded bg-gray-100" value="9" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">Pb (Bly)</label><input type="number" data-param="Pb (Bly)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">Cd (Kadmium)</label><input type="number" data-param="Cd (Kadmium)" class="border p-1 rounded bg-gray-100" value="2" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">Cu (Kopper)</label><input type="number" data-param="Cu (Kopper)" class="border p-1 rounded bg-gray-100" value="200" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">Cr (Krom)</label><input type="number" data-param="Cr (Krom)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">Hg (Kvikksølv)</label><input type="number" data-param="Hg (Kvikksølv)" class="border p-1 rounded bg-gray-100" value="2" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">Ni (Nikkel)</label><input type="number" data-param="Ni (Nikkel)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">Zn (Sink)</label><input type="number" data-param="Zn (Sink)" class="border p-1 rounded bg-gray-100" value="500" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">Ag (Sølv)</label><input type="number" data-param="Ag (Sølv)" class="border p-1 rounded bg-gray-100" value="50" disabled></div>
+                    <div class="flex flex-col"><label class="font-bold text-gray-800 mb-1">CN (Cyanid)</label><input type="number" data-param="CN (Cyanid)" class="border p-1 rounded bg-gray-100" value="500" disabled></div>
                 </div>
             </div>
 
-            <!-- Krok 2: Upload -->
             <div class="mb-6 no-print">
-                <h2 class="text-lg font-semibold text-gray-700 mb-4 border-b pb-2" data-translate-key="step2Title">Steg 2: Last opp Excel-fil</h2>
-                <div id="drop-zone" class="flex flex-col items-center justify-center w-full h-36 border-2 border-blue-300 border-dashed rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100 transition-all shadow-sm relative group">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4 border-b pb-2" data-translate-key="step2Title">Steg 2: Last opp Excel-fil</h2>
+                <div id="drop-zone" class="flex flex-col items-center justify-center w-full h-36 border-2 border-blue-400 border-dashed rounded-lg cursor-pointer bg-white/40 hover:bg-white/60 transition-all shadow-sm relative group">
                     <div class="flex flex-col items-center justify-center pt-5 pb-6 pointer-events-none">
-                        <svg class="w-10 h-10 mb-3 text-blue-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                        <p class="mb-1 text-sm text-blue-700 font-bold" data-translate-key="filePrompt">Klikk for å velge fil eller dra den hit</p>
-                        <p id="file-name" class="text-xs text-blue-500 font-medium">.XLS, .XLSX</p>
+                        <svg class="w-10 h-10 mb-3 text-blue-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        <p class="mb-1 text-sm text-blue-800 font-bold" data-translate-key="filePrompt">Klikk for å velge fil eller dra den hit</p>
+                        <p id="file-name" class="text-xs text-blue-600 font-bold">.XLS, .XLSX</p>
                     </div>
-                    <input id="excel-file" type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"/>
+                    <input id="excel-file" type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".xlsx, .xls"/>
                 </div>
             </div>
             
-            <!-- Krok 3: Wybór lokacji -->
             <div id="separator-selection-section" class="mb-6 hidden no-print">
-                <h2 class="text-lg font-semibold text-gray-700 mb-4 border-b pb-2" data-translate-key="step3Title">Steg 3: Velg lokasjoner å inkludere</h2>
+                <h2 class="text-lg font-semibold text-gray-800 mb-4 border-b pb-2" data-translate-key="step3Title">Steg 3: Velg lokasjoner å inkludere</h2>
                 
                 <div class="mb-4 flex flex-col md:flex-row gap-2">
                     <div class="flex-grow">
-                        <input type="text" id="location-search" data-translate-attr="placeholder:searchPlaceholder" placeholder="Søk etter lokasjon..." class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <input type="text" id="location-search" data-translate-attr="placeholder:searchPlaceholder" placeholder="Søk etter lokasjon..." class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500 bg-white/80">
                     </div>
                     <div class="flex gap-2">
-                        <button id="select-visible-btn" class="px-3 py-2 text-xs font-bold bg-blue-100 text-blue-700 rounded hover:bg-blue-200 border border-blue-200 whitespace-nowrap" data-translate-key="selectVisibleBtn">✓ Velg synlige</button>
-                        <button id="deselect-visible-btn" class="px-3 py-2 text-xs font-bold bg-gray-100 text-gray-700 rounded hover:bg-gray-200 border border-gray-200 whitespace-nowrap" data-translate-key="deselectVisibleBtn">✕ Fjern synlige</button>
+                        <button id="select-visible-btn" class="px-3 py-2 text-xs font-bold bg-blue-100 text-blue-800 rounded hover:bg-blue-200 border border-blue-300 whitespace-nowrap" data-translate-key="selectVisibleBtn">✓ Velg synlige</button>
+                        <button id="deselect-visible-btn" class="px-3 py-2 text-xs font-bold bg-gray-100 text-gray-800 rounded hover:bg-gray-200 border border-gray-300 whitespace-nowrap" data-translate-key="deselectVisibleBtn">✕ Fjern synlige</button>
                     </div>
                 </div>
 
-                <div class="bg-gray-50 p-4 rounded border border-gray-200 mb-4">
+                <div class="bg-white/50 p-4 rounded border border-gray-300 mb-4">
                     <div class="flex items-center mb-4 border-b pb-2 justify-between">
                         <div class="flex items-center">
-                            <span class="text-sm font-bold text-gray-700" data-translate-key="foundLocations">Funnet lokasjoner:</span>
+                            <span class="text-sm font-bold text-gray-800" data-translate-key="foundLocations">Funnet lokasjoner:</span>
                         </div>
-                        <span id="selection-count" class="text-xs text-gray-500 italic">0 valgt</span>
+                        <span id="selection-count" class="text-xs text-gray-600 italic font-bold">0 valgt</span>
                     </div>
                     <div id="separator-checkboxes" class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 max-h-60 overflow-y-auto pr-2">
                     </div>
@@ -132,38 +164,34 @@
                 </div>
             </div>
             
-            <!-- Sekcja Raportu -->
             <div id="report-section" class="mt-8 hidden">
                 <h2 class="text-xl font-bold text-gray-800 mb-4 text-center" data-translate-key="reportTitle">Melding til Kunde</h2>
                 <div id="report-content" class="p-6 border border-gray-300 rounded-lg bg-white text-gray-800 shadow-inner">
                 </div>
                 <div class="mt-6 flex justify-center gap-4 no-print">
-                    <button id="print-btn" class="btn bg-gray-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-700" data-translate-key="printBtn">Skriv ut</button>
-                    <button id="download-pdf-btn" class="btn bg-blue-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600" data-translate-key="downloadPdfBtn">Lagre som PDF</button>
+                    <button id="print-btn" class="btn bg-gray-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-800" data-translate-key="printBtn">Skriv ut</button>
+                    <button id="download-pdf-btn" class="btn bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700" data-translate-key="downloadPdfBtn">Lagre som PDF</button>
                 </div>
             </div>
 
-            <div id="error-message" class="mt-4 text-center text-red-600 font-medium hidden p-3 bg-red-50 rounded border border-red-200"></div>
+            <div id="error-message" class="mt-4 text-center text-red-600 font-bold hidden p-3 bg-red-50/80 rounded border border-red-200"></div>
 
-            <!-- Stopka Programu -->
-            <div id="app-footer" class="flex flex-col items-center justify-center mt-12 pb-4 border-t border-gray-200 pt-4 no-print gap-2">
-                <div class="text-center text-gray-400 text-xs">Utviklet av <span class="font-bold text-gray-600">Marcin Dusinski</span> &copy; 2025</div>
-                <button id="open-license-btn" class="text-xs text-blue-500 hover:underline mt-2">Lisens / Om programmet</button>
+            <div id="app-footer" class="flex flex-col items-center justify-center mt-12 pb-4 border-t border-gray-300 pt-4 no-print gap-2">
+                <div class="text-center text-gray-600 text-xs font-bold">Utviklet av <span class="font-black text-gray-800">Marcin Dusinski</span> &copy; 2025</div>
+                <button id="open-license-btn" class="text-xs text-blue-600 hover:underline mt-2 font-bold">Lisens / Om programmet</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal Licencji -->
     <div id="license-modal" class="modal no-print">
         <div class="modal-content relative">
             <button id="close-license-btn" class="absolute top-2 right-2 text-gray-500 hover:text-gray-800"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             <h2 class="text-xl font-bold mb-4 text-gray-800">Lisens / Licencja</h2>
-            <div class="text-sm text-gray-600 space-y-4">
+            <div class="text-sm text-gray-700 space-y-4 font-medium">
                 <p><strong>Utvikler / Twórca:</strong> Marcin Dusinski</p>
                 <p><strong>Copyright &copy; 2025</strong></p>
-                <p class="text-xs text-gray-400 mt-4">Version 2.7 | Release Build (ALS)</p>
-                
-                <div class="mt-4 p-3 bg-red-50 border border-red-100 rounded text-xs text-red-800">
+                <p class="text-xs text-gray-500 mt-4">Version 2.9 | Release Build (ALS)</p>
+                <div class="mt-4 p-3 bg-red-50 border border-red-100 rounded text-xs text-red-900">
                     <p class="font-bold mb-1" data-translate-key="legalTitle">Juridisk Advarsel / Nota Prawna</p>
                     <p data-translate-key="legalText">Dette programmet er beskyttet av opphavsrett. Kommersiell bruk, redistribusjon eller salg uten skriftlig samtykke fra opphavsrettsinnehaveren er strengt forbudt.</p>
                 </div>
